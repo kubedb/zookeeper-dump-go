@@ -1,25 +1,51 @@
-#
-#  Makefile for Go
-#
-SHELL=/usr/bin/env bash
-VERSION=$(shell git describe --tags --always)
-PACKAGES = $(shell find ./ -type d | grep -v 'vendor' | grep -v '.git' | grep -v 'bin')
+#!/usr/bin/make
 
-default: build
+.PHONY: test build build-static build-generator-static docker-image save-image push-image docker-test docker-build-static docker-build-generator-static release acceptance-tests
 
-.PHONY: gox
-gox:
-	go get -u github.com/mitchellh/gox
+RELEASE_VERSION ?= latest
 
-.PHONY: build
+export GOFLAGS=-mod=vendor
+
+all: test build
+
+test:
+	go test ./...
+	go vet ./...
+
 build:
-	go build -ldflags="-X main.Version=${VERSION}" -o burry-${VERSION}
+	go build -o bin/burry
 
-.PHONY: clean
-clean:
-	rm -f coverage-all.out
-	rm -f coverage.out
+build-static:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o bin/burry
 
-.PHONY: binaries
-binaries:
-	gox github.com/mhausenblas/burry.sh
+build-generator-static:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o bin/generator ./utils/generator/main.go
+
+docker-image:
+	docker build -t burry:${RELEASE_VERSION} .
+
+save-image:
+	docker save --output burry-image.tar burry:${RELEASE_VERSION}
+
+push-image:
+	docker tag burry:latest ghcr.io/yannh/burry:${RELEASE_VERSION}
+	docker push ghcr.io/yannh/burry:${RELEASE_VERSION}
+
+docker-test:
+	docker run -t -v $$PWD:/go/src/github.com/yannh/burry -w /go/src/github.com/yannh/burry golang:1.18 make test
+
+docker-build-static:
+	docker run -t -v $$PWD:/go/src/github.com/yannh/burry -w /go/src/github.com/yannh/burry golang:1.18 make build-static
+
+docker-build-generator-static:
+	docker run -t -v $$PWD:/go/src/github.com/yannh/burry -w /go/src/github.com/yannh/burry golang:1.18 make build-generator-static
+
+goreleaser-build-static:
+	docker run -e GOCACHE=/tmp -v $$PWD/.gitconfig:/root/.gitconfig -t -v $$PWD:/go/src/github.com/yannh/burry -w /go/src/github.com/yannh/burry goreleaser/goreleaser:v1.8.3 build --single-target --skip-post-hooks --rm-dist --snapshot
+	cp dist/burry_linux_amd64_v1/burry bin/
+
+release:
+	docker run -e GITHUB_TOKEN -t -v $$PWD/.gitconfig:/root/.gitconfig -v /var/run/docker.sock:/var/run/docker.sock -v $$PWD:/go/src/github.com/yannh/burry -w /go/src/github.com/yannh/burry goreleaser/goreleaser:v1.8.3 release --rm-dist
+
+acceptance-tests: docker-build-static docker-build-generator-static
+	docker-compose run tests
