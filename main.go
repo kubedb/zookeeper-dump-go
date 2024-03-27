@@ -7,11 +7,9 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-	etcd "github.com/coreos/etcd/client"
-	consul "github.com/hashicorp/consul/api"
 	flag "github.com/ogier/pflag"
 	"github.com/samuel/go-zookeeper/zk"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -43,10 +41,8 @@ var (
 	isvcs = [...]string{INFRA_SERVICE_ZK, INFRA_SERVICE_ETCD, INFRA_SERVICE_CONSUL}
 	// the infra service endpoint to use:
 	endpoint string
-  timeout  int
+	timeout  int
 	zkconn   *zk.Conn
-	kapi     etcd.KeysAPI
-	ckv      *consul.KV
 	// the storage target to use:
 	starget   string
 	startgets = [...]string{
@@ -94,17 +90,17 @@ func init() {
 	flag.Parse()
 
 	switch log_level := os.Getenv("LOG_LEVEL"); log_level {
-  case "DEBUG":
+	case "DEBUG":
 		log.SetLevel(log.DebugLevel)
-  case "WARN":
+	case "WARN":
 		log.SetLevel(log.WarnLevel)
-  case "ERROR":
+	case "ERROR":
 		log.SetLevel(log.ErrorLevel)
-  case "FATAL":
+	case "FATAL":
 		log.SetLevel(log.FatalLevel)
-  case "PANIC":
+	case "PANIC":
 		log.SetLevel(log.PanicLevel)
-  default:
+	default:
 		log.SetLevel(log.InfoLevel)
 	}
 
@@ -138,10 +134,6 @@ func processop() bool {
 		switch brf.InfraService {
 		case INFRA_SERVICE_ZK:
 			success = backupZK()
-		case INFRA_SERVICE_ETCD:
-			success = backupETCD()
-		case INFRA_SERVICE_CONSUL:
-			success = backupCONSUL()
 		default:
 			log.WithFields(log.Fields{"func": "processop"}).Error(fmt.Sprintf("Infra service %s unknown or not yet supported", brf.InfraService))
 		}
@@ -157,10 +149,6 @@ func processop() bool {
 		switch brf.InfraService {
 		case INFRA_SERVICE_ZK:
 			success = restoreZK()
-		case INFRA_SERVICE_ETCD:
-			success = restoreETCD()
-		case INFRA_SERVICE_CONSUL:
-			success = restoreCONSUL()
 		default:
 			log.WithFields(log.Fields{"func": "processop"}).Error(fmt.Sprintf("Infra service %s unknown or not yet supported", brf.InfraService))
 		}
